@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login & Register</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 320px;
+    }
+    h2 {
+      text-align: center;
+    }
+    input {
+      display: block;
+      margin-bottom: 15px;
+      padding: 10px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .toggle, .forgot-link {
+      text-align: center;
+      margin-top: 10px;
+      cursor: pointer;
+      color: #007bff;
+      text-decoration: underline;
+    }
+    #message {
+      text-align: center;
+      margin-top: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="formTitle">Login</h2>
+
+    <!-- Auth Form -->
+    <form id="authForm">
+      <input type="text" id="identifier" placeholder="Username or Email" required />
+      <input type="email" id="email" placeholder="Email (for registration)" class="hidden" />
+      <input type="password" id="password" placeholder="Password" required />
+      <button type="submit" id="submitBtn">Login</button>
+    </form>
+
+    <div class="toggle" id="toggleForm">Don't have an account? Register</div>
+    <div class="forgot-link" id="forgotLink">Forgot Password?</div>
+    <p id="message"></p>
+
+    <!-- Reset Form -->
+    <div id="resetSection" class="hidden">
+      <h2>Reset Password</h2>
+      <form id="resetForm">
+        <input type="password" id="newPassword" placeholder="New Password" required />
+        <input type="password" id="confirmPassword" placeholder="Confirm Password" required />
+        <button type="submit">Reset Password</button>
+      </form>
+      <p id="resetMessage"></p>
+    </div>
+  </div>
+
+  <script>
+  let isLogin = true;
+
+  // Toggle Login/Register
+  document.getElementById('toggleForm').addEventListener('click', () => {
+    isLogin = !isLogin;
+    document.getElementById('formTitle').textContent = isLogin ? 'Login' : 'Register';
+    document.getElementById('submitBtn').textContent = isLogin ? 'Login' : 'Sign Up';
+    document.getElementById('toggleForm').textContent = isLogin
+      ? "Don't have an account? Register"
+      : "Already have an account? Login";
+    document.getElementById('forgotLink').style.display = isLogin ? 'block' : 'none';
+    document.getElementById('email').classList.toggle('hidden', isLogin);
+    document.getElementById('resetSection').classList.add('hidden'); // Hide reset after toggle
+    document.getElementById('message').textContent = '';
+    document.getElementById('message').style.color = '';
+  });
+
+  // Auth Form Submit
+  document.getElementById('authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const identifier = document.getElementById('identifier').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const endpoint = isLogin ? '/login' : '/register';
+
+    const payload = isLogin
+      ? { identifier, password }
+      : { username: identifier, email, password };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+
+      document.getElementById('message').textContent = result.message;
+      document.getElementById('message').style.color = response.ok ? 'green' : 'red';
+
+      if (response.ok) {
+        if (!isLogin) {
+          // After registration, switch to login
+          setTimeout(() => {
+            isLogin = true;
+            document.getElementById('formTitle').textContent = 'Login';
+            document.getElementById('submitBtn').textContent = 'Login';
+            document.getElementById('toggleForm').textContent = "Don't have an account? Register";
+            document.getElementById('forgotLink').style.display = 'block';
+            document.getElementById('email').classList.add('hidden');
+            document.getElementById('message').textContent = '';
+            alert('Registration successful! You can now log in.');
+          }, 1000);
+        } else {
+          // After login, redirect to dashboard
+          setTimeout(() => {
+            alert('Login successful!');
+            window.location.href = '/dashboard.html'; // Redirect to dashboard
+          }, 1000);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      document.getElementById('message').textContent = 'Network error';
+      document.getElementById('message').style.color = 'red';
+    }
+  });
+
+  // Forgot Password
+  document.getElementById('forgotLink').addEventListener('click', async () => {
+    const identifier = document.getElementById('identifier').value.trim();
+    if (!identifier) return alert('Please enter your username or email first.');
+
+    const response = await fetch('/forgot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier })
+    });
+    const data = await response.json();
+    alert(data.message);
+
+    if (data.message === 'Reset link sent to your email') {
+      document.getElementById('resetSection').classList.remove('hidden');
+    }
+  });
+
+  // Reset Password
+  document.getElementById('resetForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const token = new URLSearchParams(window.location.search).get('token');
+
+    if (!token) {
+      document.getElementById('resetMessage').textContent = 'Missing token from email link.';
+      document.getElementById('resetMessage').style.color = 'red';
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      document.getElementById('resetMessage').textContent = 'Passwords do not match';
+      document.getElementById('resetMessage').style.color = 'red';
+      return;
+    }
+
+    const response = await fetch('/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password: newPassword })
+    });
+
+    const data = await response.json();
+    document.getElementById('resetMessage').textContent = data.message;
+    document.getElementById('resetMessage').style.color = data.message === 'Password reset successful' ? 'green' : 'red';
+
+    if (data.message === 'Password reset successful') {
+      setTimeout(() => {
+        window.location.href = '/'; // Redirect back to login
+      }, 2000);
+    }
+  });
+</script>
+</body>
+</html>
+  

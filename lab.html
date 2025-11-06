@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMS - Lab & Imaging</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    // Suppress Tailwind warning
+    tailwind.config = { corePlugins: { preflight: false } };
+  </script>
+  <style>
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.4);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: auto;
+      padding: 20px;
+      border: none;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .error-message {
+      color: #ef4444;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div id="labSection" class="p-6 bg-white rounded-lg shadow-md max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-gray-800">
+        <i class="fas fa-flask mr-2 text-blue-600"></i>
+        Lab & Imaging
+      </h2>
+      <button onclick="toggleForm()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition flex items-center">
+        <i class="fas fa-plus mr-2"></i>
+        Add Record
+      </button>
+    </div>
+
+    <!-- Add Form (Hidden by default) -->
+    <div id="addFormContainer" class="mb-6 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500" style="display: none;">
+      <h3 class="text-lg font-semibold mb-4 text-gray-700">Add Lab Record</h3>
+      <form id="labForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="patientSelect" class="block text-sm font-medium text-gray-700 mb-1">Patient <span class="text-red-500">*</span></label>
+          <select id="patientSelect" required
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Select Patient</option>
+          </select>
+        </div>
+        <div>
+          <label for="testType" class="block text-sm font-medium text-gray-700 mb-1">Test Type <span class="text-red-500">*</span></label>
+          <input type="text" id="testType" placeholder="e.g., Blood Test" required
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="testDate" class="block text-sm font-medium text-gray-700 mb-1">Test Date <span class="text-red-500">*</span></label>
+          <input type="date" id="testDate" required
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="technicianName" class="block text-sm font-medium text-gray-700 mb-1">Technician Name <span class="text-red-500">*</span></label>
+          <input type="text" id="technicianName" placeholder="e.g., Dr. Smith" required
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="md:col-span-2">
+          <label for="result" class="block text-sm font-medium text-gray-700 mb-1">Result/Findings <span class="text-red-500">*</span></label>
+          <textarea id="result" placeholder="Enter detailed results..." required rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+        <div class="md:col-span-2 flex gap-2">
+          <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+            <i class="fas fa-save mr-2"></i>
+            Save Record
+          </button>
+          <button type="button" onclick="toggleForm()" class="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">
+            <i class="fas fa-times mr-2"></i>
+            Cancel
+          </button>
+        </div>
+      </form>
+      <div id="addError" class="error-message mt-2" style="display: none;"></div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="mb-4 flex flex-col sm:flex-row gap-2">
+      <input type="text" id="searchInput" placeholder="Search by test type, patient, technician, or date..." class="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button onclick="clearSearch()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+        <i class="fas fa-refresh"></i> Clear
+      </button>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="text-center py-8 hidden">
+      <i class="fas fa-spinner fa-spin text-2xl text-blue-600 mb-2"></i>
+      <p>Loading records...</p>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-x-auto">
+      <table id="labTable" class="w-full table-auto border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-left">
+            <th class="px-4 py-2 border">Patient</th>
+            <th class="px-4 py-2 border">Test Type</th>
+            <th class="px-4 py-2 border">Date</th>
+            <th class="px-4 py-2 border">Technician</th>
+            <th class="px-4 py-2 border">Result</th>
+            <th class="px-4 py-2 border">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="labBody" class="text-sm text-gray-700"></tbody>
+      </table>
+    </div>
+    <div id="fetchError" class="error-message mt-4" style="display: none;"></div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+      <div class="modal-content bg-white rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Edit Lab Record</h3>
+        <p id="editPatientName" class="text-sm text-gray-600 mb-4 font-medium"></p>
+        <form id="editLabForm">
+          <input type="hidden" id="editId">
+          <label for="editTestType" class="block text-sm font-medium text-gray-700 mb-1">Test Type</label>
+          <input type="text" id="editTestType" required class="w-full px-3 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <label for="editTestDate" class="block text-sm font-medium text-gray-700 mb-1">Test Date</label>
+          <input type="date" id="editTestDate" required class="w-full px-3 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <label for="editTechnician" class="block text-sm font-medium text-gray-700 mb-1">Technician Name</label>
+          <input type="text" id="editTechnician" required class="w-full px-3 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <label for="editResult" class="block text-sm font-medium text-gray-700 mb-1">Result</label>
+          <textarea id="editResult" required rows="3" class="w-full px-3 py-2 border border-gray-300 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="flex gap-2 mt-4">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              <i class="fas fa-save mr-2"></i>
+              Save Changes
+            </button>
+            <button type="button" onclick="closeEditModal()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+              <i class="fas fa-times mr-2"></i>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden z-50">
+      <i class="fas fa-check mr-2"></i>
+      <span id="toastMessage"></span>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = 'http://localhost:3000/api';  // Adjust to your backend
+    let allRecords = [];
+    let allPatients = [];
+
+    // Show toast
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const messageEl = document.getElementById('toastMessage');
+      messageEl.textContent = message;
+      toast.className = `fixed top-4 right-4 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white p-4 rounded-lg shadow-lg z-50`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // Toggle add form
+    function toggleForm() {
+      const container = document.getElementById('addFormContainer');
+      container.style.display = container.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Clear search
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      displayRecords(allRecords);
+    }
+
+    // Show loading
+    function showLoading(show = true) {
+      document.getElementById('loadingSpinner').classList.toggle('hidden', !show);
+    }
+
+    // Load patients for select
+    async function loadPatients() {
+      try {
+        const response = await fetch(`${BASE_URL}/patients`);
+        if (!response.ok) throw new Error('Failed to load patients');
+        allPatients = await response.json();
+        const select = document.getElementById('patientSelect');
+        select.innerHTML = '<option value="">Select Patient</option>' + 
+          allPatients.map(p => `<option value="${p.id}">${p.name} (${p.dob})</option>`).join('');
+      } catch (error) {
+        console.error('Error loading patients:', error);
+        showToast('Failed to load patients: ' + error.message, 'error');
+      }
+    }
+
+    // Fetch and display records
+    async function fetchRecords() {
+      try {
+        showLoading(true);
+        const response = await fetch(`${BASE_URL}/lab`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        allRecords = await response.json();
+        console.log('Fetched records:', allRecords);
+        displayRecords(allRecords);
+      } catch (error) {
+        console.error('Error fetching records:', error);
+        showToast('Failed to load records: ' + error.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // Display records in table
+    function displayRecords(records) {
+      const tbody = document.getElementById('labBody');
+      tbody.innerHTML = '';
+      if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No records found.</td></tr>';
+        return;
+      }
+      records.forEach(record => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="px-4 py-2 border">${record.patient_name || 'N/A'}</td>
+          <td class="px-4 py-2 border">${record.test_type || 'N/A'}</td>
+          <td class="px-4 py-2 border">${new Date(record.test_date).toLocaleDateString()}</td>
+          <td class="px-4 py-2 border">${record.technician_name || 'N/A'}</td>
+          <td class="px-4 py-2 border">${record.result || 'N/A'}</td>
+          <td class="px-4 py-2 border">
+            <button onclick="editRecord(${record.id})" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 mr-1">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button onclick="deleteRecord(${record.id})" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Search/filter (client-side)
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      const filtered = allRecords.filter(r =>
+        (r.test_type && r.test_type.toLowerCase().includes(term)) ||
+        (r.patient_name && r.patient_name.toLowerCase().includes(term)) ||
+        (r.technician_name && r.technician_name.toLowerCase().includes(term)) ||
+        (r.result && r.result.toLowerCase().includes(term)) ||
+        (r.test_date && r.test_date.includes(term))
+      );
+      displayRecords(filtered);
+    });
+
+    // Add record
+    document.getElementById('labForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const patientId = document.getElementById('patientSelect').value;
+      if (!patientId) {
+        showToast('Please select a patient', 'error');
+        return;
+      }
+      const formData = {
+        testType: document.getElementById('testType').value,
+        testDate: document.getElementById('testDate').value,
+        technicianName: document.getElementById('technicianName').value,
+        result: document.getElementById('result').value
+      };
+      try {
+        const response = await fetch(`${BASE_URL}/lab/${patientId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to add record');
+        }
+        showToast('Record added successfully!');
+        e.target.reset();
+        toggleForm();
+        fetchRecords();
+      } catch (error) {
+        console.error('Error adding record:', error);
+        showToast('Error adding record: ' + error.message, 'error');
+      }
+    });
+
+    // Edit record (load from local cache)
+    async function editRecord(id) {
+      const record = allRecords.find(r => r.id == id);
+      if (!record) {
+        showToast('Record not found', 'error');
+        return;
+      }
+      document.getElementById('editId').value = record.id;
+      document.getElementById('editTestType').value = record.test_type || '';
+      document.getElementById('editTestDate').value = record.test_date || '';
+      document.getElementById('editTechnician').value = record.technician_name || '';
+      document.getElementById('editResult').value = record.result || '';
+      document.getElementById('editPatientName').textContent = `Patient: ${record.patient_name || 'N/A'}`;
+      document.getElementById('editModal').style.display = 'block';
+    }
+
+    // Save edit
+    document.getElementById('editLabForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editId').value;
+      const formData = {
+        testType: document.getElementById('editTestType').value,
+        testDate: document.getElementById('editTestDate').value,
+        technicianName: document.getElementById('editTechnician').value,
+        result: document.getElementById('editResult').value
+      };
+      try {
+        const response = await fetch(`${BASE_URL}/lab/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (!response.ok) throw new Error('Failed to update record');
+        showToast('Record updated successfully!');
+        closeEditModal();
+        fetchRecords();
+      } catch (error) {
+        showToast('Error updating record: ' + error.message, 'error');
+      }
+    });
+
+    // Delete record
+    async function deleteRecord(id) {
+      const confirmed = confirm("Are you sure? This can't be undone.");
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(`${BASE_URL}/lab/${id}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.message || 'Failed to delete record';
+          throw new Error(errorMessage);
+        }
+
+        showToast('Record deleted successfully!');
+        await fetchRecords();
+      } catch (error) {
+        showToast(`Error deleting record: ${error.message}`, 'error');
+      }
+    }
+
+    // Close edit modal
+    function closeEditModal() {
+      document.getElementById('editModal').style.display = 'none';
+      document.getElementById('editLabForm').reset();
+      document.getElementById('editPatientName').textContent = '';
+    }
+
+    // Close modal on outside click
+    document.getElementById('editModal').addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal')) {
+        closeEditModal();
+      }
+    });
+
+    // Initial load
+    loadPatients();
+    fetchRecords();
+  </script>
+</body>
+</html>
