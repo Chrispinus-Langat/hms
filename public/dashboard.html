@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HMS Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+  <!-- Top Navigation Bar -->
+  <nav class="bg-indigo-600 text-white p-4 shadow">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Hospital Management System</h1>
+      <div class="flex items-center gap-4">
+        <span>Welcome, Dr. Chris</span>
+        <button aria-label="Notifications" class="text-lg hover:text-gray-300">
+          <i class="fas fa-bell"></i>
+        </button>
+        <button onclick="logout()" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Logout</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="flex flex-col md:flex-row">
+    <!-- Sidebar -->
+    <aside class="w-full md:w-64 bg-white shadow h-auto md:h-screen p-4">
+      <nav>
+        <ul class="space-y-2">
+          <li><a href="patients.html" class="flex items-center gap-3 p-3 bg-indigo-100 rounded-lg"><i class="fas fa-users"></i><span>Patients</span></a></li>
+          
+          <li><a href="appointments.html" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-calendar-alt"></i><span>Appointments</span></a></li>
+          <li><a href="emr.html" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-file-medical"></i><span>EMR</span></a></li>
+          <li><a href="lab.html" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-syringe"></i><span>Lab/Imaging</span></a></li>
+          <li><a href="telemedicine.html" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-video"></i><span>Telemedicine</span></a></li>
+          <li><a href="#" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-dollar-sign"></i><span>Billing</span></a></li>
+          <li><a href="#" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-chart-bar"></i><span>Reports</span></a></li>
+          <li><a href="#" class="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg"><i class="fas fa-cogs"></i><span>Settings</span></a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6">
+      <!-- Overview Cards -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div>
+  <h2>Total Patients</h2>
+  <p id="totalPatients">...</p>
+</div>
+<div>
+  <h2>Today's Appointments</h2>
+  <p id="todaysAppointments">...</p>
+</div>
+<div>
+  <h2>Pending Bills</h2>
+  <p id="pendingBills">...</p>
+</div>
+<div>
+  <h2>Bed Occupancy</h2>
+  <p id="bedOccupancy">...</p>
+</div>
+
+      </section>
+
+      <!-- Recent Patients Table -->
+      <section class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-xl font-semibold mb-4">Recent Patients</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full table-auto">
+            <thead>
+              <tr class="bg-gray-200 text-left">
+                <th class="p-3">Name</th>
+                <th class="p-3">Appointment</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b">
+                <td class="p-3">John Cheluget</td>
+                <td class="p-3">General Checkup</td>
+                <td class="p-3"><span class="bg-green-100 text-green-800 px-2 py-1 rounded">Completed</span></td>
+                <td class="p-3"><button class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">View</button></td>
+              </tr>
+              <tr class="border-b">
+                <td class="p-3">Jane Smith</td>
+                <td class="p-3">Lab Test</td>
+                <td class="p-3"><span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pending</span></td>
+                <td class="p-3"><button class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    function logout() {
+      window.location.href = '/';
+    }
+    
+async function loadDashboardMetrics() {
+  try {
+    const res = await fetch('/metrics/patients');
+    const data = await res.json();
+    document.getElementById('totalPatients').textContent = data.total;
+  } catch (err) {
+    console.error('❌ Failed to load metrics:', err);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadDashboardMetrics();
+});
+
+async function loadDashboardMetrics() {
+  try {
+    const [patientsRes, appointmentsRes, billingRes, bedsRes] = await Promise.all([
+      fetch('/metrics/patients'),
+      fetch('/metrics/appointments'),
+      fetch('/metrics/billing'),
+      fetch('/metrics/beds')
+    ]);
+
+    const patients = await patientsRes.json();
+    const appointments = await appointmentsRes.json();
+    const billing = await billingRes.json();
+    const beds = await bedsRes.json();
+
+    document.getElementById('totalPatients').textContent = patients.total;
+    document.getElementById('todaysAppointments').textContent = appointments.today;
+    document.getElementById('pendingBills').textContent = `KES ${billing.pending.toLocaleString()}`;
+    document.getElementById('bedOccupancy').textContent = `${beds.occupancy}%`;
+  } catch (err) {
+    console.error('❌ Failed to load dashboard metrics:', err);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', loadDashboardMetrics);
+
+   // document.querySelectorAll('aside a').forEach(link => {
+   //   link.addEventListener('click', (e) => {
+     //   e.preventDefault();
+       // alert('Navigating to ' + link.textContent.trim() + ' (implement route)');
+     // });
+    //});
+  </script>
+
+</body>
+</html>

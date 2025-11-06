@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMS - Electronic Medical Records (EMR)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Suppress Tailwind warning
+    tailwind.config = { corePlugins: { preflight: false } };
+  </script>
+  <style>
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); justify-content: center; align-items: center; }
+    .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; }
+    .error-message { color: #ef4444; font-size: 0.875rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .alert-item { background: #fef3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 8px; margin: 4px 0; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div id="emrSection" class="p-6 bg-white rounded-lg shadow-md max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-gray-800">
+        <i class="fas fa-file-medical mr-2 text-purple-600"></i>
+        Electronic Medical Records (EMR)
+      </h2>
+      <div class="flex gap-2">
+        <input type="text" id="searchInput" placeholder="Search records..." class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500">
+        <button onclick="filterRecords()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+          <i class="fas fa-search mr-2"></i> Filter
+        </button>
+      </div>
+    </div>
+
+    <!-- Patient Selection -->
+    <div id="patientSelectContainer" class="mb-6 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+      <h3 class="text-lg font-semibold mb-4 text-gray-700">Select Patient</h3>
+      <div class="flex gap-2">
+        <select id="patientSelect" class="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500">
+          <option value="">Choose a patient to view EMR...</option>
+        </select>
+        <button onclick="loadPatientEMR()" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700">
+          <i class="fas fa-arrow-right mr-2"></i> Load EMR
+        </button>
+      </div>
+      <div id="patientSelectError" class="error-message mt-2" style="display: none;"></div>
+    </div>
+
+    <!-- Patient Info & Alerts -->
+    <div id="emrMain" class="hidden">
+      <div id="patientInfo" class="mb-6 p-4 bg-blue-50 rounded-lg">
+        <h3 class="text-lg font-semibold">Patient Demographics:</h3>
+        <p id="patientDetails" class="text-gray-700"></p>
+      </div>
+
+      <!-- Alerts & Reminders -->
+      <div id="alertsSection" class="mb-6 p-4 bg-red-50 rounded-lg hidden">
+        <h4 class="font-medium mb-2 text-red-800">Alerts & Reminders</h4>
+        <div id="alertsList"></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-gray-200 mb-4 overflow-x-auto">
+        <button onclick="switchTab('demographics')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Demographics</button>
+        <button onclick="switchTab('history')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Medical History</button>
+        <button onclick="switchTab('visits')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Visit Records</button>
+        <button onclick="switchTab('documentation')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Clinical Documentation</button>
+        <button onclick="switchTab('labs')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Labs & Imaging</button>
+        <button onclick="switchTab('medications')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Medications</button>
+        <button onclick="switchTab('analytics')" class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 hover:text-purple-600 border-b-2 border-transparent whitespace-nowrap">Analytics</button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div id="demographicsTab" class="tab-content active">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="p-4 bg-gray-50 rounded">
+            <h4 class="font-medium mb-2">Personal Info</h4>
+            <p id="personalInfo"></p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded">
+            <h4 class="font-medium mb-2">Insurance</h4>
+            <p id="insuranceInfo"></p>
+          </div>
+          <div class="p-4 bg-gray-50 rounded">
+            <h4 class="font-medium mb-2">Family History</h4>
+            <p id="familyHistory"></p>
+          </div>
+        </div>
+        <button onclick="updateDemographics()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 mt-4">
+          <i class="fas fa-edit mr-2"></i> Update Demographics
+        </button>
+      </div>
+
+      <div id="historyTab" class="tab-content">
+        <div class="overflow-x-auto">
+          <table id="historyTable" class="w-full table-auto border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-left">
+                <th class="px-4 py-2 border">Date</th>
+                <th class="px-4 py-2 border">Illness/Surgery</th>
+                <th class="px-4 py-2 border">Details</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="visitsTab" class="tab-content">
+        <div class="overflow-x-auto">
+          <table id="visitsTable" class="w-full table-auto border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-left">
+                <th class="px-4 py-2 border">Date</th>
+                <th class="px-4 py-2 border">Reason</th>
+                <th class="px-4 py-2 border">Physician</th>
+                <th class="px-4 py-2 border">Status</th>
+              </tr>
+            </thead>
+            <tbody id="visitsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="documentationTab" class="tab-content">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <h4 class="font-medium mb-2">Progress Notes</h4>
+            <form id="progressNoteForm" class="space-y-2">
+              <textarea id="progressNotes" rows="3" placeholder="Enter progress note..." class="w-full px-3 py-2 border rounded"></textarea>
+              <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Note</button>
+            </form>
+            <div id="progressNotesList" class="mt-4 space-y-2"></div>
+          </div>
+          <div>
+            <h4 class="font-medium mb-2">SOAP Notes</h4>
+            <form id="soapNoteForm" class="space-y-2">
+              <input id="soapSubjective" placeholder="Subjective" class="w-full px-3 py-2 border rounded">
+              <input id="soapObjective" placeholder="Objective" class="w-full px-3 py-2 border rounded">
+              <input id="soapAssessment" placeholder="Assessment" class="w-full px-3 py-2 border rounded">
+              <textarea id="soapPlan" placeholder="Plan" rows="2" class="w-full px-3 py-2 border rounded"></textarea>
+              <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add SOAP Note</button>
+            </form>
+            <div id="soapNotesList" class="mt-4 space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="labsTab" class="tab-content">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="overflow-x-auto">
+            <table id="labsTable" class="w-full table-auto border-collapse">
+              <thead>
+                <tr class="bg-gray-100 text-left">
+                  <th class="px-4 py-2 border">Test Type</th>
+                  <th class="px-4 py-2 border">Date</th>
+                  <th class="px-4 py-2 border">Result</th>
+                </tr>
+              </thead>
+              <tbody id="labsBody"></tbody>
+            </table>
+          </div>
+          <div>
+            <h4 class="font-medium mb-2">Lab Trends</h4>
+            <canvas id="labChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="medicationsTab" class="tab-content">
+        <div class="overflow-x-auto mb-4">
+          <table id="medsTable" class="w-full table-auto border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-left">
+                <th class="px-4 py-2 border">Medication</th>
+                <th class="px-4 py-2 border">Dosage</th>
+                <th class="px-4 py-2 border">Frequency</th>
+                <th class="px-4 py-2 border">Interactions</th>
+              </tr>
+            </thead>
+            <tbody id="medsBody"></tbody>
+          </table>
+        </div>
+        <form id="medicationForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <input id="medName" placeholder="Medication" class="px-3 py-2 border rounded">
+          <input id="medDosage" placeholder="Dosage" class="px-3 py-2 border rounded">
+          <input id="medFrequency" placeholder="Frequency" class="px-3 py-2 border rounded">
+          <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 md:col-span-3">Add Medication</button>
+        </form>
+        <button onclick="checkInteractions()" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 mt-2">
+          Check Drug Interactions
+        </button>
+      </div>
+
+      <div id="analyticsTab" class="tab-content">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 bg-gray-50 rounded">
+            <h4 class="font-medium mb-2">Patient Outcomes</h4>
+            <canvas id="outcomesChart" height="200"></canvas>
+          </div>
+          <div class="p-4 bg-gray-50 rounded">
+            <h4 class="font-medium mb-2">Occupancy Metrics</h4>
+            <p id="occupancyMetrics"></p>
+          </div>
+        </div>
+        <button onclick="generateReport()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-4">
+          Generate Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden z-50">
+      <i class="fas fa-check mr-2"></i>
+      <span id="toastMessage"></span>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = 'http://localhost:3000/api';
+    let currentPatientId = null;
+    let allPatients = [];
+    let emrData = {};
+    let labChart, outcomesChart;
+    let searchTerm = '';
+
+    // Show toast
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMessage').textContent = message;
+      toast.className = `fixed top-4 right-4 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white p-4 rounded-lg shadow-lg z-50`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // Search & Filter
+    function filterRecords() {
+      searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      switchTab(document.querySelector('.tab-btn.active').getAttribute('onclick').match(/'([^']+)'/)[1]);
+    }
+
+    // Tab switching with filter
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.getElementById(`${tabName}Tab`).classList.add('active');
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('text-purple-600', 'border-purple-600'));
+      event.target.classList.add('text-purple-600', 'border-purple-600');
+      if (tabName === 'history') loadHistory();
+      if (tabName === 'visits') loadVisits();
+      if (tabName === 'documentation') loadDocumentation();
+      if (tabName === 'labs') loadLabs();
+      if (tabName === 'medications') loadMedications();
+      if (tabName === 'analytics') loadAnalytics();
+    }
+
+    // Load patients
+    async function loadPatients() {
+      try {
+        const res = await fetch(`${BASE_URL}/patients`);
+        if (!res.ok) throw new Error('Failed to load patients');
+        allPatients = await res.json();
+        const select = document.getElementById('patientSelect');
+        select.innerHTML = '<option value="">Choose a patient to view EMR...</option>' + 
+          allPatients.map(p => `<option value="${p.id}">${p.name} (${p.dob})</option>`).join('');
+      } catch (err) {
+        console.error('Error loading patients:', err);
+        showToast('Failed to load patients: ' + err.message, 'error');
+      }
+    }
+
+    // Load full EMR
+    async function loadPatientEMR() {
+      const select = document.getElementById('patientSelect');
+      currentPatientId = select.value;
+      if (!currentPatientId) return showToast('Please select a patient', 'error');
+      
+      try {
+        const res = await fetch(`${BASE_URL}/emr/${currentPatientId}`);
+        if (!res.ok) throw new Error('Failed to load EMR');
+        emrData = await res.json();
+        displayPatientInfo();
+        loadAlerts();
+        document.getElementById('emrMain').classList.remove('hidden');
+        showToast(`EMR loaded for ${emrData.patient.name}`);
+        switchTab('demographics');
+      } catch (err) {
+        showToast('Error loading EMR: ' + err.message, 'error');
+      }
+    }
+
+    // Display demographics
+    function displayPatientInfo() {
+      const patient = emrData.patient;
+      const age = new Date().getFullYear() - new Date(patient.dob).getFullYear();
+      document.getElementById('patientDetails').innerHTML = `
+        <strong>${patient.name}</strong> | Age: ${age} | Gender: ${patient.gender || 'N/A'} | Contact: ${patient.contact || 'N/A'} | Insurance: ${patient.insurance || 'N/A'}
+      `;
+      document.getElementById('personalInfo').textContent = `DOB: ${patient.dob} | Address: ${patient.address || 'N/A'}`;
+      document.getElementById('insuranceInfo').textContent = `Provider: ${patient.insurance_provider || 'N/A'} | Policy: ${patient.insurance_policy || 'N/A'}`;
+      document.getElementById('familyHistory').textContent = emrData.family_history || 'No family history recorded';
+    }
+
+    // Load alerts
+    function loadAlerts() {
+      const alerts = emrData.alerts || [];
+      const list = document.getElementById('alertsList');
+      if (alerts.length === 0) {
+        document.getElementById('alertsSection').classList.add('hidden');
+        return;
+      }
+      list.innerHTML = alerts.map(a => `<div class="alert-item"><i class="fas fa-exclamation-triangle mr-2"></i>${a.message} (${new Date(a.timestamp).toLocaleString()})</div>`).join('');
+      document.getElementById('alertsSection').classList.remove('hidden');
+    }
+
+    // History
+    function loadHistory() {
+      const filtered = (emrData.history || []).filter(h => 
+        h.diagnosis.toLowerCase().includes(searchTerm) || h.notes.toLowerCase().includes(searchTerm)
+      );
+      const tbody = document.getElementById('historyBody');
+      tbody.innerHTML = filtered.length === 0 ? '<tr><td colspan="3" class="p-4 text-center text-gray-500">No history found.</td></tr>' : 
+        filtered.map(h => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border">${new Date(h.date).toLocaleDateString()}</td>
+            <td class="px-4 py-2 border">${h.diagnosis || 'N/A'}</td>
+            <td class="px-4 py-2 border">${h.notes || 'N/A'}</td>
+          </tr>
+        `).join('');
+    }
+
+    // Visits
+    function loadVisits() {
+      const filtered = (emrData.visits || []).filter(v => 
+        v.reason.toLowerCase().includes(searchTerm) || v.physician.toLowerCase().includes(searchTerm)
+      );
+      const tbody = document.getElementById('visitsBody');
+      tbody.innerHTML = filtered.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-500">No visits found.</td></tr>' : 
+        filtered.map(v => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border">${new Date(v.date).toLocaleDateString()}</td>
+            <td class="px-4 py-2 border">${v.reason || 'N/A'}</td>
+            <td class="px-4 py-2 border">${v.physician || 'N/A'}</td>
+            <td class="px-4 py-2 border"><span class="px-2 py-1 rounded ${v.status === 'discharged' ? 'bg-green-200' : 'bg-yellow-200'}">${v.status || 'Active'}</span></td>
+          </tr>
+        `).join('');
+    }
+
+    // Documentation
+    function loadDocumentation() {
+      loadProgressNotes();
+      loadSoapNotes();
+    }
+
+    function loadProgressNotes() {
+      const notes = emrData.progress_notes || [];
+      const list = document.getElementById('progressNotesList');
+      list.innerHTML = notes.map(n => `<div class="p-3 bg-gray-100 rounded"><strong>${new Date(n.date).toLocaleDateString()}:</strong> ${n.note}</div>`).join('');
+    }
+
+    function loadSoapNotes() {
+      const notes = emrData.soap_notes || [];
+      const list = document.getElementById('soapNotesList');
+      list.innerHTML = notes.map(n => `
+        <div class="p-3 bg-gray-100 rounded space-y-1">
+          <strong>${new Date(n.date).toLocaleDateString()}:</strong>
+          <p><strong>S:</strong> ${n.subjective}</p>
+          <p><strong>O:</strong> ${n.objective}</p>
+          <p><strong>A:</strong> ${n.assessment}</p>
+          <p><strong>P:</strong> ${n.plan}</p>
+        </div>
+      `).join('');
+    }
+
+    // Progress note form
+    document.getElementById('progressNoteForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const note = document.getElementById('progressNotes').value;
+      if (!note) return;
+      try {
+        await fetch(`${BASE_URL}/emr/${currentPatientId}/progress-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note, date: new Date().toISOString().split('T')[0] })
+        });
+        showToast('Progress note added');
+        document.getElementById('progressNotes').value = '';
+        loadDocumentation();  // Reload
+      } catch (err) {
+        showToast('Error adding note: ' + err.message, 'error');
+      }
+    });
+
+    // SOAP note form
+    document.getElementById('soapNoteForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = {
+        subjective: document.getElementById('soapSubjective').value,
+        objective: document.getElementById('soapObjective').value,
+        assessment: document.getElementById('soapAssessment').value,
+        plan: document.getElementById('soapPlan').value,
+        date: new Date().toISOString().split('T')[0]
+      };
+      if (!formData.subjective || !formData.objective) return;
+      try {
+        await fetch(`${BASE_URL}/emr/${currentPatientId}/soap-note`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        showToast('SOAP note added');
+        e.target.reset();
+        loadDocumentation();
+      } catch (err) {
+        showToast('Error adding SOAP note: ' + err.message, 'error');
+      }
+    });
+
+    // Labs
+    function loadLabs() {
+      const filtered = (emrData.labs || []).filter(l => 
+        l.test_type.toLowerCase().includes(searchTerm) || l.result.toLowerCase().includes(searchTerm)
+      );
+      const tbody = document.getElementById('labsBody');
+      tbody.innerHTML = filtered.length === 0 ? '<tr><td colspan="3" class="p-4 text-center text-gray-500">No labs found.</td></tr>' : 
+        filtered.map(l => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border">${l.test_type || 'N/A'}</td>
+            <td class="px-4 py-2 border">${new Date(l.test_date).toLocaleDateString()}</td>
+            <td class="px-4 py-2 border">${l.result || 'N/A'}</td>
+          </tr>
+        `).join('');
+      drawLabChart(filtered);
+    }
+
+    function drawLabChart(labs) {
+      const ctx = document.getElementById('labChart').getContext('2d');
+      if (labChart) labChart.destroy();
+      labChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labs.map(l => new Date(l.test_date).toLocaleDateString()),
+          datasets: [{ label: 'Sample Value', data: labs.map(() => Math.random() * 100), borderColor: 'purple' }]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    // Medications
+    function loadMedications() {
+      const filtered = (emrData.medications || []).filter(m => m.medication.toLowerCase().includes(searchTerm));
+      const tbody = document.getElementById('medsBody');
+      tbody.innerHTML = filtered.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-500">No medications found.</td></tr>' : 
+        filtered.map(m => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 border">${m.medication || 'N/A'}</td>
+            <td class="px-4 py-2 border">${m.dosage || 'N/A'}</td>
+            <td class="px-4 py-2 border">${m.frequency || 'N/A'}</td>
+            <td class="px-4 py-2 border" id="interaction-${m.id}">${m.interactions || 'None'}</td>
+          </tr>
+        `).join('');
+      checkInteractions();  // Auto-check
+    }
+
+    // Medication form
+    document.getElementById('medicationForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = {
+        medication: document.getElementById('medName').value,
+        dosage: document.getElementById('medDosage').value,
+        frequency: document.getElementById('medFrequency').value,
+        duration: 30  // Default
+      };
+      if (!formData.medication) return;
+      try {
+        await fetch(`${BASE_URL}/emr/${currentPatientId}/medication`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        showToast('Medication added');
+        e.target.reset();
+        loadMedications();
+      } catch (err) {
+        showToast('Error adding medication: ' + err.message, 'error');
+      }
+    });
+
+    function checkInteractions() {
+      // Mock interaction check
+      const meds = emrData.medications || [];
+      meds.forEach(m => {
+        const cell = document.getElementById(`interaction-${m.id}`);
+        if (cell) cell.innerHTML = Math.random() > 0.7 ? '<span class="text-red-500">Warning: Potential interaction</span>' : 'None';
+      });
+      showToast('Interactions checked (mock)');
+    }
+
+    // Analytics
+    function loadAnalytics() {
+      const ctx = document.getElementById('outcomesChart').getContext('2d');
+      if (outcomesChart) outcomesChart.destroy();
+      outcomesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Visits', 'Outcomes', 'Readmissions'],
+          datasets: [{ label: 'Metrics', data: [15, 90, 5], backgroundColor: 'purple' }]
+        },
+        options: { responsive: true }
+      });
+      document.getElementById('occupancyMetrics').innerHTML = 'Occupancy: 75% | Avg Stay: 4.2 days (mock)';
+    }
+
+    function generateReport() {
+      showToast('Report generated (download mock PDF)');
+    }
+
+    // Update placeholders
+    function updateDemographics() { showToast('Update demographics - implement form'); }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadPatients();
+    });
+  </script>
+</body>
+</html>

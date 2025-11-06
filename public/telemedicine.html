@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMS - Telemedicine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    // Suppress Tailwind warning
+    tailwind.config = { corePlugins: { preflight: false } };
+  </script>
+  <style>
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); justify-content: center; align-items: center; }
+    .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; position: relative; }
+    .error-message { color: #ef4444; font-size: 0.875rem; }
+    .video-placeholder { height: 200px; background: linear-gradient(45deg, #e0f2fe, #baffaa); display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+    .chat-bubble { background: #e3f2fd; border-radius: 12px; padding: 8px 12px; margin: 4px 0; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div id="telemedicineSection" class="p-6 bg-white rounded-lg shadow-md max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-gray-800">
+        <i class="fas fa-video mr-2 text-green-600"></i>
+        Telemedicine
+      </h2>
+      <div class="flex gap-2">
+        <button onclick="toggleScheduleForm()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition flex items-center" id="scheduleBtn" disabled>
+          <i class="fas fa-calendar-plus mr-2"></i>
+          Schedule Appointment
+        </button>
+        <button onclick="startVideoCall()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition flex items-center" id="videoBtn" disabled>
+          <i class="fas fa-video mr-2"></i>
+          Start Video Call
+        </button>
+      </div>
+    </div>
+
+    <!-- Patient Selection -->
+    <div id="patientSelectContainer" class="mb-6 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+      <h3 class="text-lg font-semibold mb-4 text-gray-700">Select Patient</h3>
+      <div class="flex gap-2">
+        <select id="patientSelect" class="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500">
+          <option value="">Choose a patient to begin...</option>
+        </select>
+        <button onclick="loadPatient()" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700">
+          <i class="fas fa-arrow-right mr-2"></i> Load
+        </button>
+      </div>
+      <div id="patientSelectError" class="error-message mt-2" style="display: none;"></div>
+    </div>
+
+    <!-- Patient Info (from selected patient) -->
+    <div id="patientInfo" class="mb-6 p-4 bg-blue-50 rounded-lg hidden">
+      <h3 class="text-lg font-semibold">Consulting Patient:</h3>
+      <p id="patientDetails" class="text-gray-700"></p>
+    </div>
+
+    <!-- Schedule Form (Hidden) -->
+    <div id="scheduleFormContainer" class="mb-6 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500" style="display: none;">
+      <h3 class="text-lg font-semibold mb-4 text-gray-700">Schedule Virtual Appointment</h3>
+      <form id="scheduleForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="specialty" class="block text-sm font-medium text-gray-700 mb-1">Specialty <span class="text-red-500">*</span></label>
+          <select id="specialty" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Select Specialty</option>
+            <option value="general">General Practitioner</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="mental">Mental Health</option>
+          </select>
+        </div>
+        <div>
+          <label for="apptDate" class="block text-sm font-medium text-gray-700 mb-1">Date <span class="text-red-500">*</span></label>
+          <input type="date" id="apptDate" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="apptTime" class="block text-sm font-medium text-gray-700 mb-1">Time <span class="text-red-500">*</span></label>
+          <input type="time" id="apptTime" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="md:col-span-2">
+          <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+          <textarea id="notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+        <div class="md:col-span-2 flex gap-2">
+          <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+            <i class="fas fa-save mr-2"></i> Schedule
+          </button>
+          <button type="button" onclick="toggleScheduleForm()" class="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+            <i class="fas fa-times mr-2"></i> Cancel
+          </button>
+        </div>
+      </form>
+      <div id="scheduleError" class="error-message mt-2" style="display: none;"></div>
+    </div>
+
+    <!-- Appointments Table -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-4">Upcoming Appointments</h3>
+      <div id="loadingSpinner" class="text-center py-8 hidden">
+        <i class="fas fa-spinner fa-spin text-2xl text-blue-600 mb-2"></i>
+        <p>Loading appointments...</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table id="apptTable" class="w-full table-auto border-collapse hidden">
+          <thead>
+            <tr class="bg-gray-100 text-left">
+              <th class="px-4 py-2 border">Specialty</th>
+              <th class="px-4 py-2 border">Date & Time</th>
+              <th class="px-4 py-2 border">Status</th>
+              <th class="px-4 py-2 border">Notes</th>
+              <th class="px-4 py-2 border">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="apptBody"></tbody>
+        </table>
+      </div>
+      <div id="apptError" class="error-message mt-4" style="display: none;"></div>
+    </div>
+
+    <!-- EMR Access Section -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-4">EMR Access</h3>
+      <button onclick="loadEMR()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 mb-4" id="emrBtn" disabled>
+        <i class="fas fa-file-medical mr-2"></i> Load Patient EMR
+      </button>
+      <div id="emrContent" class="hidden p-4 bg-gray-50 rounded-lg">
+        <h4 id="emrPatientName" class="font-medium mb-2"></h4>
+        <p><strong>History:</strong> <span id="emrHistory"></span></p>
+        <p><strong>Lab Results:</strong> <span id="emrLabs"></span></p>
+      </div>
+    </div>
+
+    <!-- E-Prescriptions Form -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-4">E-Prescriptions</h3>
+      <form id="prescriptionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="medication" class="block text-sm font-medium text-gray-700 mb-1">Medication <span class="text-red-500">*</span></label>
+          <input type="text" id="medication" placeholder="e.g., Amoxicillin" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+        <div>
+          <label for="dosage" class="block text-sm font-medium text-gray-700 mb-1">Dosage <span class="text-red-500">*</span></label>
+          <input type="text" id="dosage" placeholder="e.g., 500mg" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+        <div>
+          <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Duration (days) <span class="text-red-500">*</span></label>
+          <input type="number" id="duration" min="1" required class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+        <div class="md:col-span-2">
+          <label for="instructions" class="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+          <textarea id="instructions" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700" id="presBtn" disabled>
+            <i class="fas fa-prescription mr-2"></i> Send Prescription
+          </button>
+        </div>
+      </form>
+      <div id="presError" class="error-message mt-2" style="display: none;"></div>
+    </div>
+
+    <!-- Communication Tools (Simple Chat) -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-4">Patient Communication</h3>
+      <div class="border border-gray-300 rounded-lg p-4 h-64 overflow-y-auto mb-4" id="chatContainer">
+        <div class="chat-bubble text-center text-gray-500">Select a patient to start chatting...</div>
+      </div>
+      <div class="flex gap-2">
+        <input type="text" id="chatInput" placeholder="Type a message..." class="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+        <button onclick="sendMessage()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" id="chatSendBtn" disabled>
+          <i class="fas fa-paper-plane"></i> Send
+        </button>
+      </div>
+    </div>
+
+    <!-- Video Call Placeholder -->
+    <div id="videoCallContainer" class="hidden">
+      <h3 class="text-lg font-semibold mb-4">Video Consultation</h3>
+      <div class="video-placeholder">
+        <div class="text-center">
+          <i class="fas fa-video text-4xl text-gray-500 mb-2"></i>
+          <p>Secure Video Call (Simulated - Integrate WebRTC/Twilio here)</p>
+          <button onclick="endVideoCall()" class="mt-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">End Call</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden z-50">
+      <i class="fas fa-check mr-2"></i>
+      <span id="toastMessage"></span>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = 'http://localhost:3000/api';
+    let currentPatientId = new URLSearchParams(window.location.search).get('patient');  // Fallback to URL param
+    let appointments = [];
+    let messages = [];
+    let allPatients = [];
+
+    // Show toast
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMessage').textContent = message;
+      toast.className = `fixed top-4 right-4 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white p-4 rounded-lg shadow-lg z-50`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // Toggle schedule form
+    function toggleScheduleForm() {
+      const container = document.getElementById('scheduleFormContainer');
+      container.style.display = container.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Start video call (placeholder)
+    function startVideoCall() {
+      if (!currentPatientId) return showToast('Select a patient first', 'error');
+      document.getElementById('videoCallContainer').classList.remove('hidden');
+      showToast('Video call started (simulated)');
+      // TODO: Integrate real WebRTC or Twilio
+    }
+
+    function endVideoCall() {
+      document.getElementById('videoCallContainer').classList.add('hidden');
+      showToast('Call ended');
+    }
+
+    // Load EMR
+    async function loadEMR() {
+      if (!currentPatientId) return showToast('No patient selected', 'error');
+      try {
+        const res = await fetch(`${BASE_URL}/telemedicine/patients/${currentPatientId}/emr`);
+        if (!res.ok) throw new Error('Failed to load EMR');
+        const emr = await res.json();
+        document.getElementById('emrPatientName').textContent = `Patient: ${emr.name}`;
+        document.getElementById('emrHistory').textContent = emr.history || 'No history available';
+        document.getElementById('emrLabs').textContent = emr.labs || 'No lab results';
+        document.getElementById('emrContent').classList.remove('hidden');
+      } catch (err) {
+        showToast('Error loading EMR: ' + err.message, 'error');
+      }
+    }
+
+    // Load appointments
+    async function loadAppointments() {
+      if (!currentPatientId) return;
+      try {
+        document.getElementById('loadingSpinner').classList.remove('hidden');
+        document.getElementById('apptTable').classList.add('hidden');
+        const res = await fetch(`${BASE_URL}/telemedicine/appointments/${currentPatientId}`);
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${res.status}`);
+        }
+        appointments = await res.json();
+        displayAppointments();
+      } catch (err) {
+        console.error(err);
+        showToast('Error loading appointments: ' + err.message, 'error');
+      } finally {
+        document.getElementById('loadingSpinner').classList.add('hidden');
+      }
+    }
+
+    // Display appointments
+    function displayAppointments() {
+      const tbody = document.getElementById('apptBody');
+      tbody.innerHTML = '';
+      if (appointments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No appointments found.</td></tr>';
+      } else {
+        appointments.forEach(appt => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-gray-50';
+          tr.innerHTML = `
+            <td class="px-4 py-2 border">${appt.specialty || 'N/A'}</td>
+            <td class="px-4 py-2 border">${new Date(appt.date_time).toLocaleString()}</td>
+            <td class="px-4 py-2 border"><span class="px-2 py-1 rounded ${appt.status === 'confirmed' ? 'bg-green-200' : 'bg-yellow-200'}">${appt.status || 'Pending'}</span></td>
+            <td class="px-4 py-2 border">${appt.notes || 'N/A'}</td>
+            <td class="px-4 py-2 border">
+              <button onclick="rescheduleAppt(${appt.id})" class="bg-yellow-500 text-white px-2 py-1 rounded mr-1"><i class="fas fa-edit"></i></button>
+              <button onclick="cancelAppt(${appt.id})" class="bg-red-500 text-white px-2 py-1 rounded"><i class="fas fa-trash"></i></button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      document.getElementById('apptTable').classList.remove('hidden');
+    }
+
+    // Schedule appointment
+    document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentPatientId) return showToast('No patient selected', 'error');
+      const formData = {
+        specialty: document.getElementById('specialty').value,
+        date_time: `${document.getElementById('apptDate').value}T${document.getElementById('apptTime').value}`,
+        notes: document.getElementById('notes').value,
+        status: 'pending'
+      };
+      try {
+        const res = await fetch(`${BASE_URL}/telemedicine/appointments/${currentPatientId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to schedule');
+        }
+        showToast('Appointment scheduled!');
+        e.target.reset();
+        toggleScheduleForm();
+        loadAppointments();
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    });
+
+    // Reschedule/Cancel (placeholders)
+    function rescheduleAppt(id) { showToast('Reschedule functionality - implement modal'); }
+    function cancelAppt(id) {
+      if (confirm('Cancel appointment?')) {
+        // TODO: DELETE /telemedicine/appointments/${id}
+        showToast('Appointment cancelled');
+        loadAppointments();
+      }
+    }
+
+    // Send prescription
+    document.getElementById('prescriptionForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentPatientId) return showToast('No patient selected', 'error');
+      const formData = {
+        medication: document.getElementById('medication').value,
+        dosage: document.getElementById('dosage').value,
+        duration: document.getElementById('duration').value,
+        instructions: document.getElementById('instructions').value,
+        status: 'sent'
+      };
+      try {
+        const res = await fetch(`${BASE_URL}/telemedicine/prescriptions/${currentPatientId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to send prescription');
+        }
+        showToast('Prescription sent!');
+        e.target.reset();
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    });
+
+    // Chat (simulated local storage - load messages for patient on select)
+    function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const msg = input.value.trim();
+      if (!msg || !currentPatientId) return;
+      messages.push({ text: msg, sender: 'doctor', timestamp: new Date().toISOString() });
+      input.value = '';
+      displayMessages();
+      // TODO: POST to /telemedicine/messages/${currentPatientId}
+    }
+
+    function displayMessages() {
+      const container = document.getElementById('chatContainer');
+      if (messages.length === 0) {
+        container.innerHTML = '<div class="chat-bubble text-center text-gray-500">No messages yet.</div>';
+        return;
+      }
+      container.innerHTML = messages.map(m => `<div class="chat-bubble ${m.sender === 'doctor' ? 'text-right ml-auto' : 'mr-auto'}">${m.text} <small class="text-gray-500">${new Date(m.timestamp).toLocaleTimeString()}</small></div>`).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Load patients for selection
+    async function loadPatients() {
+      try {
+        const res = await fetch(`${BASE_URL}/patients`);
+        if (!res.ok) throw new Error('Failed to load patients');
+        allPatients = await res.json();
+        const select = document.getElementById('patientSelect');
+        select.innerHTML = '<option value="">Choose a patient to begin...</option>' + 
+          allPatients.map(p => `<option value="${p.id}" ${p.id == currentPatientId ? 'selected' : ''}>${p.name} (${p.dob})</option>`).join('');
+      } catch (err) {
+        console.error('Error loading patients:', err);
+        showToast('Failed to load patients: ' + err.message, 'error');
+        document.getElementById('patientSelectError').textContent = err.message;
+        document.getElementById('patientSelectError').style.display = 'block';
+      }
+    }
+
+    // Load selected patient
+    async function loadPatient() {
+      const select = document.getElementById('patientSelect');
+      currentPatientId = select.value;
+      if (!currentPatientId) return showToast('Please select a patient', 'error');
+      
+      try {
+        const res = await fetch(`${BASE_URL}/patients/${currentPatientId}`);
+        if (!res.ok) throw new Error('Failed to load patient');
+        const patient = await res.json();
+        document.getElementById('patientDetails').innerHTML = `<strong>${patient.name}</strong> (DOB: ${patient.dob})`;
+        document.getElementById('patientInfo').classList.remove('hidden');
+        
+        // Enable buttons
+        document.getElementById('scheduleBtn').disabled = false;
+        document.getElementById('videoBtn').disabled = false;
+        document.getElementById('emrBtn').disabled = false;
+        document.getElementById('presBtn').disabled = false;
+        document.getElementById('chatInput').disabled = false;
+        document.getElementById('chatSendBtn').disabled = false;
+        
+        // Reload sections
+        messages = [];  // Reset chat for new patient
+        displayMessages();
+        loadAppointments();
+        showToast(`Loaded patient: ${patient.name}`);
+      } catch (err) {
+        showToast('Error loading patient: ' + err.message, 'error');
+      }
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadPatients();
+      if (currentPatientId) {
+        // If URL param provided, auto-load
+        loadPatient();
+      }
+    });
+  </script>
+</body>
+</html>
